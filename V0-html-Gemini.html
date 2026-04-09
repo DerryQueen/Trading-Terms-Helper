@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incoterms 供应链链式分析系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        consulting: {
+                            blue: '#1E3A8A', // 深邃蓝
+                            purple: '#4C1D95', // 高级紫
+                            light: '#F3F4F6'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased">
+    <div id="app" class="max-w-4xl mx-auto p-4 md:p-8">
+        
+        <header class="mb-8 border-b-2 border-consulting-blue pb-4 flex justify-between items-end">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-consulting-blue tracking-tight">国际贸易链式解析工具</h1>
+                <p class="text-sm text-gray-500 mt-1">基于 ICC Incoterms® 2020 规则</p>
+            </div>
+            <button @click="exportPDF" class="bg-consulting-purple hover:bg-purple-800 text-white text-sm py-2 px-4 rounded shadow transition">
+                导出 PDF
+            </button>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-sm border border-gray-100 mb-8">
+            <h2 class="text-lg font-semibold text-consulting-blue mb-4">设定贸易链路</h2>
+            
+            <div class="space-y-4">
+                <div v-for="(leg, index) in tradeLegs" :key="index" class="flex flex-col md:flex-row items-center gap-3 p-3 bg-gray-50 rounded">
+                    <div class="flex items-center gap-2 w-full md:w-auto">
+                        <input v-model="leg.seller" placeholder="卖方" class="border rounded px-2 py-1 w-24 text-center">
+                        <span class="text-gray-400">→</span>
+                        <input v-model="leg.buyer" placeholder="买方" class="border rounded px-2 py-1 w-24 text-center">
+                    </div>
+                    
+                    <select v-model="leg.term" class="border rounded px-3 py-1 bg-white w-full md:w-auto text-consulting-purple font-medium">
+                        <option v-for="(data, term) in incotermsData" :value="term">{{ term }}</option>
+                    </select>
+
+                    <button v-if="tradeLegs.length > 1" @click="removeLeg(index)" class="text-red-500 hover:text-red-700 text-sm ml-auto">
+                        删除
+                    </button>
+                </div>
+            </div>
+
+            <button @click="addLeg" class="mt-4 text-consulting-blue text-sm border border-consulting-blue rounded px-4 py-2 hover:bg-consulting-blue hover:text-white transition">
+                + 添加贸易流转环节
+            </button>
+        </section>
+
+        <section id="report-content" class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+            <h2 class="text-lg font-semibold text-consulting-blue mb-4">链式分析报告</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm border-collapse">
+                    <thead>
+                        <tr class="bg-consulting-blue text-white">
+                            <th class="p-3 border">贸易段</th>
+                            <th class="p-3 border">术语</th>
+                            <th class="p-3 border">风险转移界点</th>
+                            <th class="p-3 border">卖方承担主要费用</th>
+                            <th class="p-3 border">买方承担主要费用</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(leg, index) in tradeLegs" :key="'report-'+index" class="hover:bg-gray-50">
+                            <td class="p-3 border font-medium text-gray-700">{{ leg.seller }} → {{ leg.buyer }}</td>
+                            <td class="p-3 border font-bold text-consulting-purple">{{ leg.term }}</td>
+                            <td class="p-3 border">{{ incotermsData[leg.term].riskTransfer }}</td>
+                            <td class="p-3 border">
+                                <ul class="list-disc pl-4 text-gray-600">
+                                    <li v-for="cost in incotermsData[leg.term].sellerCosts">{{ cost }}</li>
+                                </ul>
+                            </td>
+                            <td class="p-3 border">
+                                <ul class="list-disc pl-4 text-gray-600">
+                                    <li v-for="cost in incotermsData[leg.term].buyerCosts">{{ cost }}</li>
+                                </ul>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-8 bg-gray-50 p-4 rounded text-sm text-gray-600">
+                <h3 class="font-bold mb-2">专业提示：</h3>
+                <p>以上分析仅展示风险与费用的转移。货权（Title）的转移不受 Incoterms 约束，须在相应的销售合同中以保留所有权等物权条款另行明确。对于涉及首次销售（First Sale）原则的海关估价筹划，应重点关注多段运费在完税价格中的剥离依据。</p>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive } = Vue;
+
+        createApp({
+            setup() {
+                // 核心权威数据层 (易于在此处维护和扩展)
+                const incotermsData = reactive({
+                    EXW: { riskTransfer: "卖方所在地", sellerCosts: ["出口包装"], buyerCosts: ["装车", "出口清关", "起运地运输", "主运输", "保险", "进口清关", "目的地相关运输"] },
+                    FCA: { riskTransfer: "货交承运人（起运地）", sellerCosts: ["出口包装", "出口清关", "交货至指定承运人"], buyerCosts: ["主运输", "保险", "进口清关", "目的地相关运输"] },
+                    FOB: { riskTransfer: "装运港船上", sellerCosts: ["出口包装", "出口清关", "起运地运输", "起运港装船"], buyerCosts: ["主运输(海运)", "保险", "进口清关", "目的港卸货及后续运输"] },
+                    CFR: { riskTransfer: "装运港船上", sellerCosts: ["出口包装", "出口清关", "起运地运输", "起运港装船", "主运输(海运)"], buyerCosts: ["保险", "进口清关", "目的港卸货及后续运输"] },
+                    CIF: { riskTransfer: "装运港船上", sellerCosts: ["出口包装", "出口清关", "起运地运输", "起运港装船", "主运输(海运)", "最低海运保险"], buyerCosts: ["目的港卸货", "进口清关", "后续运输"] },
+                    DAP: { riskTransfer: "目的地指定地点（未卸车）", sellerCosts: ["出口包装", "出口清关", "起运地运输", "主运输", "目的港/地到达"], buyerCosts: ["目的地卸车", "进口清关及税费"] },
+                    DDP: { riskTransfer: "目的地指定地点（未卸车）", sellerCosts: ["出口包装", "出口清关", "起运地运输", "主运输", "进口清关及税费", "目的地到达"], buyerCosts: ["目的地卸车"] }
+                });
+
+                // 默认初始化一条供应链：A公司(制造商) -> B公司(中间商) -> C公司(进口商)
+                const tradeLegs = ref([
+                    { seller: 'A公司', buyer: 'B公司', term: 'FOB' },
+                    { seller: 'B公司', buyer: 'C公司', term: 'DDP' }
+                ]);
+
+                const addLeg = () => {
+                    const lastBuyer = tradeLegs.value.length > 0 ? tradeLegs.value[tradeLegs.value.length - 1].buyer : '公司X';
+                    tradeLegs.value.push({ seller: lastBuyer, buyer: '新公司', term: 'EXW' });
+                };
+
+                const removeLeg = (index) => {
+                    tradeLegs.value.splice(index, 1);
+                };
+
+                const exportPDF = () => {
+                    const element = document.getElementById('report-content');
+                    const opt = {
+                        margin:       10,
+                        filename:     '贸易链式分析报告.pdf',
+                        image:        { type: 'jpeg', quality: 0.98 },
+                        html2canvas:  { scale: 2 },
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+                    };
+                    html2pdf().set(opt).from(element).save();
+                };
+
+                return {
+                    incotermsData,
+                    tradeLegs,
+                    addLeg,
+                    removeLeg,
+                    exportPDF
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
