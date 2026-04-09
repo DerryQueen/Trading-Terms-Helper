@@ -17,6 +17,8 @@
                             light: '#F3F4F6',
                             warning: '#FEF3C7',
                             warningText: '#92400E',
+                            danger: '#FEE2E2',
+                            dangerText: '#991B1B',
                             success: '#ECFDF5',
                             successText: '#065F46'
                         }
@@ -30,11 +32,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased">
-    <div id="app" class="max-w-5xl mx-auto p-4 md:p-8">
+    <div id="app" class="max-w-6xl mx-auto p-4 md:p-8">
         
         <header class="mb-8 border-b-2 border-consulting-blue pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
-                <h1 class="text-2xl md:text-3xl font-bold text-consulting-blue tracking-tight">国际贸易链式解析系统</h1>
+                <h1 class="text-2xl md:text-3xl font-bold text-consulting-blue tracking-tight">国际贸易链式解析工具</h1>
                 <p class="text-sm text-gray-500 mt-1">基于 ICC Incoterms® 2020 | 专注海关估价与供应链合规</p>
             </div>
             <button @click="exportPDF" class="bg-consulting-purple hover:bg-purple-800 text-white text-sm py-2 px-6 rounded shadow transition shrink-0">
@@ -45,7 +47,7 @@
         <section class="bg-white p-6 rounded-lg shadow-sm border border-gray-100 mb-8 pdf-no-break">
             <h2 class="text-lg font-semibold text-consulting-blue mb-4 flex items-center">
                 <span class="w-1 h-5 bg-consulting-purple inline-block mr-2"></span>
-                场景设定
+                场景设定 
             </h2>
             
             <div class="space-y-4">
@@ -75,7 +77,7 @@
                     </div>
 
                     <div v-if="hasContainerWarning(leg)" class="w-full lg:w-auto lg:ml-auto text-xs bg-consulting-warning text-consulting-warningText px-3 py-1.5 rounded flex items-center">
-                        ⚠️ 筹划提示：集装箱装载可能引发 THC 争议，建议替换为 {{ getAlternativeTerm(leg.term) }}。
+                        ⚠️ 提示：集装箱装载可能引发 THC 争议，建议替换为 {{ getAlternativeTerm(leg.term) }}。
                     </div>
 
                     <button v-if="tradeLegs.length > 1" @click="removeLeg(index)" class="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-xs">
@@ -86,12 +88,8 @@
 
             <div class="mt-5 flex flex-col sm:flex-row gap-3">
                 <button @click="addLeg" class="text-consulting-blue text-sm border-2 border-consulting-blue border-dashed rounded px-6 py-2 hover:bg-consulting-light transition font-medium">
-                    + 新增流转节点
+                    + 新增商流节点
                 </button>
-                <div class="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded border border-gray-200">
-                    <input type="checkbox" id="dropShipment" v-model="isDropShipment" class="w-4 h-4 text-consulting-blue">
-                    <label for="dropShipment" class="font-medium cursor-pointer">开启物流直发 (Drop Shipment) 模式推演</label>
-                </div>
             </div>
         </section>
 
@@ -142,64 +140,68 @@
             <div class="pdf-page-break-before">
                 <h2 class="text-lg font-semibold text-consulting-blue mb-4 flex items-center">
                     <span class="w-1 h-5 bg-consulting-purple inline-block mr-2"></span>
-                    模块二：三流剥离合规审查 (物流、商流、单证流)
+                    模块二：单证流转配置与合规诊断矩阵
                 </h2>
+
+                <p class="text-sm text-gray-500 mb-4">请根据实际物流和商流情况，为目的港清关时提交的全套单证指派相应的责任主体：</p>
                 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="overflow-x-auto mb-6">
+                    <table class="w-full text-left text-sm border-collapse bg-white">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700">
+                                <th class="p-3 border border-gray-200 font-semibold w-1/4">核心单证类型</th>
+                                <th class="p-3 border border-gray-200 font-semibold w-1/4">出具方 / 发货人 (Issuer/Shipper)</th>
+                                <th class="p-3 border border-gray-200 font-semibold w-1/4">抬头方 / 申请人 (Billed To/Applicant)</th>
+                                <th class="p-3 border border-gray-200 font-semibold w-1/4">收货方 / 通知人 (Consignee/Notify)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(doc, index) in documents" :key="index" class="hover:bg-gray-50 transition">
+                                <td class="p-3 border border-gray-200 font-medium text-consulting-blue">{{ doc.name }}</td>
+                                <td class="p-3 border border-gray-200">
+                                    <select v-model="doc.issuer" class="w-full border rounded px-2 py-1 text-sm bg-white focus:outline-consulting-blue" :disabled="doc.issuerDisabled">
+                                        <option value="">-- 请选择 --</option>
+                                        <option v-for="comp in allCompanies" :value="comp">{{ comp }}</option>
+                                        <option value="other">第三方/其他</option>
+                                    </select>
+                                </td>
+                                <td class="p-3 border border-gray-200">
+                                    <select v-model="doc.billedTo" class="w-full border rounded px-2 py-1 text-sm bg-white focus:outline-consulting-blue" :disabled="doc.billedToDisabled">
+                                        <option value="">-- 请选择 --</option>
+                                        <option v-for="comp in allCompanies" :value="comp">{{ comp }}</option>
+                                        <option value="other">第三方/其他</option>
+                                    </select>
+                                </td>
+                                <td class="p-3 border border-gray-200">
+                                    <select v-model="doc.consignedTo" class="w-full border rounded px-2 py-1 text-sm bg-white focus:outline-consulting-blue">
+                                        <option value="">-- 请选择 --</option>
+                                        <option v-for="comp in allCompanies" :value="comp">{{ comp }}</option>
+                                        <option value="To Order">凭指示 (To Order)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="bg-gray-50 border border-gray-200 rounded p-5">
+                    <h3 class="font-bold text-consulting-blue mb-3 border-b border-gray-200 pb-2 flex items-center gap-2">
+                        <span>🛡️ 合规与关务风险诊断结论</span>
+                    </h3>
                     
-                    <div class="bg-gray-50 border border-gray-200 rounded p-4">
-                        <div class="font-bold text-consulting-blue mb-3 border-b border-gray-200 pb-2 flex items-center gap-2">
-                            <span>💰 商流与资金流</span>
-                        </div>
-                        <ul class="text-sm text-gray-700 space-y-3">
-                            <li v-for="(leg, index) in tradeLegs" :key="'comm-'+index">
-                                <div class="font-medium text-gray-900">发票路径 {{ index + 1 }}：</div>
-                                <div class="text-gray-600">{{ leg.seller }} 开具商业发票给 {{ leg.buyer }}</div>
-                            </li>
-                            <li class="bg-consulting-warning p-2 rounded text-xs text-consulting-warningText mt-2">
-                                <span class="font-bold">海关估价提示：</span> 需确认哪一段交易价格作为目的国进口报关的“完税价格”基础。若申报前端价格，需满足“首次销售 (First Sale)”原则的严格举证。
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div class="bg-gray-50 border border-gray-200 rounded p-4">
-                        <div class="font-bold text-consulting-blue mb-3 border-b border-gray-200 pb-2 flex items-center gap-2">
-                            <span>🚢 实际物流 (Physical Flow)</span>
-                        </div>
-                        <ul class="text-sm text-gray-700 space-y-3">
-                            <li v-if="isDropShipment">
-                                <div class="font-medium text-gray-900">直发路径：</div>
-                                <div class="text-consulting-purple font-bold">{{ firstParty }} 直接发运至 {{ lastParty }}</div>
-                            </li>
-                            <li v-else v-for="(leg, index) in tradeLegs" :key="'log-'+index">
-                                <div class="font-medium text-gray-900">物流段 {{ index + 1 }}：</div>
-                                <div class="text-gray-600">{{ leg.seller }} 发运至 {{ leg.buyer }}</div>
-                            </li>
-                            
-                            <li v-if="isDropShipment" class="bg-consulting-success p-2 rounded text-xs text-consulting-successText mt-2 border border-green-200">
-                                <span class="font-bold">风控提示：</span> 直发模式下，中间商不触碰货物，节约了仓储物流成本。但极易向最终买方暴露原始供应商信息，引发商业泄密风险。
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div class="bg-gray-50 border border-gray-200 rounded p-4">
-                        <div class="font-bold text-consulting-blue mb-3 border-b border-gray-200 pb-2 flex items-center gap-2">
-                            <span>📄 单证流 (Document Flow)</span>
-                        </div>
-                        <ul class="text-sm text-gray-700 space-y-3">
-                            <li v-if="isDropShipment">
-                                <div class="font-medium text-gray-900">提单流转 (B/L)：</div>
-                                <div class="text-gray-600">强烈建议采用<span class="font-bold text-consulting-purple">转换提单 (Switch B/L)</span>。在起运港或中转港将发货人替换为中间商，隐藏实际发货人 {{ firstParty }}。</div>
-                            </li>
-                            <li v-if="isDropShipment">
-                                <div class="font-medium text-gray-900">原产地证 (CO)：</div>
-                                <div class="text-gray-600">需确认目的国海关是否接受第三方发票 (Third-party Invoicing) 的原产地证，否则可能无法享受关税优惠。</div>
-                            </li>
-                            <li v-if="!isDropShipment">
-                                <div class="text-gray-600">常规逐级背书流转。注意各段贸易术语对单证提供的义务要求。</div>
-                            </li>
-                        </ul>
-                    </div>
+                    <ul class="space-y-3">
+                        <li v-if="riskAlerts.length === 0" class="text-sm text-gray-500 italic">
+                            请完善上方单证矩阵，系统将自动进行关联诊断...
+                        </li>
+                        
+                        <li v-for="(alert, index) in riskAlerts" :key="index" :class="alert.style" class="p-3 rounded text-sm flex items-start border">
+                            <span class="mr-2 mt-0.5">{{ alert.icon }}</span>
+                            <div>
+                                <strong class="block mb-1">{{ alert.title }}</strong>
+                                <span v-html="alert.desc"></span>
+                            </div>
+                        </li>
+                    </ul>
                 </div>
             </div>
 
@@ -211,54 +213,112 @@
 
         createApp({
             setup() {
+                // 贸易术语基础数据
                 const incotermsData = reactive({
-                    EXW: { riskTransfer: "卖方所在地（未装车）", sellerCosts: ["提供商业发票及核查包装"], buyerCosts: ["装车", "出口清关", "起运地运输", "主运输", "保险", "进口清关", "目的地后续运输"] },
-                    FCA: { riskTransfer: "货交承运人", sellerCosts: ["出口包装", "出口清关"], buyerCosts: ["主运输", "保险", "进口清关", "目的地相关运输"] },
-                    FAS: { riskTransfer: "装运港船边", sellerCosts: ["出口包装", "出口清关", "起运地运输", "交货至船边"], buyerCosts: ["起运港装船", "主运输(海运)", "保险", "进口清关", "目的港卸货及后续运输"] },
-                    FOB: { riskTransfer: "装运港船上", sellerCosts: ["出口包装", "出口清关", "起运地运输", "起运港装船"], buyerCosts: ["主运输(海运)", "保险", "进口清关", "目的港卸货及后续运输"] },
-                    CFR: { riskTransfer: "装运港船上", sellerCosts: ["出口包装", "出口清关", "起运地运输", "起运港装船", "主运输(海运)"], buyerCosts: ["保险", "进口清关", "目的港卸货及后续运输"] },
-                    CIF: { riskTransfer: "装运港船上", sellerCosts: ["出口包装", "出口清关", "起运地运输", "起运港装船", "主运输(海运)", "最低险(Clause C)海运保险"], buyerCosts: ["目的港卸货", "进口清关", "后续运输"] },
-                    CPT: { riskTransfer: "货交承运人（起运地）", sellerCosts: ["出口包装", "出口清关", "交货至指定承运人", "主运输"], buyerCosts: ["保险", "进口清关", "目的地相关运输"] },
-                    CIP: { riskTransfer: "货交承运人（起运地）", sellerCosts: ["出口包装", "出口清关", "交货至指定承运人", "主运输", "一切险(Clause A)海运保险"], buyerCosts: ["进口清关", "目的地相关运输"] },
-                    DAP: { riskTransfer: "目的地指定地点（未卸车）", sellerCosts: ["出口包装", "出口清关", "起运地运输", "主运输", "目的港/地到达"], buyerCosts: ["目的地卸车", "进口清关及税费"] },
-                    DPU: { riskTransfer: "目的地指定地点（已卸车）", sellerCosts: ["出口包装", "出口清关", "起运地运输", "主运输", "目的港/地到达", "目的地卸货"], buyerCosts: ["进口清关及税费", "后续运输"] },
-                    DDP: { riskTransfer: "目的地指定地点（未卸车）", sellerCosts: ["出口包装", "出口清关", "起运地运输", "主运输", "进口清关及税费", "目的地到达"], buyerCosts: ["目的地卸车"] }
+                    EXW: { riskTransfer: "卖方所在地（未装车）", sellerCosts: ["提供商业发票"], buyerCosts: ["装车", "出口清关", "主运输", "进口清关"] },
+                    FCA: { riskTransfer: "货交承运人", sellerCosts: ["出口包装", "出口清关"], buyerCosts: ["主运输", "保险", "进口清关"] },
+                    FOB: { riskTransfer: "装运港船上", sellerCosts: ["出口包装", "出口清关", "起运港装船"], buyerCosts: ["主运输(海运)", "保险", "进口清关"] },
+                    CFR: { riskTransfer: "装运港船上", sellerCosts: ["出口包装", "出口清关", "主运输(海运)"], buyerCosts: ["保险", "进口清关"] },
+                    CIF: { riskTransfer: "装运港船上", sellerCosts: ["出口包装", "出口清关", "主运输(海运)", "最低险海运保险"], buyerCosts: ["进口清关"] },
+                    CIP: { riskTransfer: "货交承运人", sellerCosts: ["出口包装", "出口清关", "主运输", "一切险海运保险"], buyerCosts: ["进口清关"] },
+                    DAP: { riskTransfer: "目的地指定地点（未卸车）", sellerCosts: ["出口清关", "主运输"], buyerCosts: ["目的地卸车", "进口清关"] },
+                    DDP: { riskTransfer: "目的地指定地点（未卸车）", sellerCosts: ["出口清关", "主运输", "进口清关及税费"], buyerCosts: ["目的地卸车"] }
                 });
 
                 const tradeLegs = ref([
-                    { seller: '制造商 A', buyer: '中间商 B', term: 'FCA', cargoType: 'container', fcaLocation: 'seller_premises' },
-                    { seller: '中间商 B', buyer: '进口商 C', term: 'CIF', cargoType: 'container' }
+                    { seller: '制造商A', buyer: '中间商B', term: 'FOB', cargoType: 'container' },
+                    { seller: '中间商B', buyer: '最终进口商C', term: 'CIF', cargoType: 'container' }
                 ]);
 
-                const isDropShipment = ref(true); // 默认开启直发推演
+                // 提取所有涉及的公司名称供下拉菜单使用
+                const allCompanies = computed(() => {
+                    const companies = new Set();
+                    tradeLegs.value.forEach(leg => {
+                        if (leg.seller) companies.add(leg.seller);
+                        if (leg.buyer) companies.add(leg.buyer);
+                    });
+                    return Array.from(companies);
+                });
 
-                const firstParty = computed(() => tradeLegs.value[0]?.seller || '');
-                const lastParty = computed(() => tradeLegs.value[tradeLegs.value.length - 1]?.buyer || '');
+                // 单证矩阵状态
+                const documents = ref([
+                    { id: 'ci', name: '目的港报关发票 (CI)', issuer: '', billedTo: '', consignedTo: '', consignedToDisabled: true },
+                    { id: 'pl', name: '装箱单 (PL)', issuer: '', billedTo: '', consignedTo: '' },
+                    { id: 'bl', name: '海运/空运提单 (B/L)', issuer: '', billedTo: '', consignedTo: '' },
+                    { id: 'co', name: '原产地证 (CO)', issuer: '', billedTo: '', consignedTo: '' },
+                ]);
+
+                // 获取特定单证的数据辅助函数
+                const getDoc = (id) => documents.value.find(d => d.id === id);
+
+                // 核心：智能风控诊断引擎
+                const riskAlerts = computed(() => {
+                    const alerts = [];
+                    const ci = getDoc('ci');
+                    const bl = getDoc('bl');
+                    const co = getDoc('co');
+
+                    const firstParty = tradeLegs.value.length > 0 ? tradeLegs.value[0].seller : null;
+                    const finalParty = tradeLegs.value.length > 0 ? tradeLegs.value[tradeLegs.value.length - 1].buyer : null;
+                    const isMultiParty = tradeLegs.value.length > 1;
+
+                    // 1. 直发盲发泄密风险 (Drop Shipment Exposure)
+                    if (isMultiParty && bl.issuer === firstParty && (bl.consignedTo === finalParty || bl.billedTo === finalParty)) {
+                        alerts.push({
+                            style: 'bg-consulting-danger border-red-200 text-consulting-dangerText',
+                            icon: '🚨',
+                            title: '高危：商业机密穿透风险 (提单暴露)',
+                            desc: `提单的发货人 (${firstParty}) 和收货/通知人 (${finalParty}) 直接对接，绕过了中间商。目的港客户将轻易获知真实源头工厂信息。建议：使用<b>转换提单 (Switch B/L)</b> 隐藏真实发货人。`
+                        });
+                    }
+
+                    // 2. 第三方发票关税优惠失效风险 (Third-Party Invoicing in FTA)
+                    if (isMultiParty && co.issuer && ci.issuer && co.issuer !== ci.issuer) {
+                        alerts.push({
+                            style: 'bg-consulting-warning border-yellow-200 text-consulting-warningText',
+                            icon: '⚠️',
+                            title: '关务合规：原产地证第三方发票冲突',
+                            desc: `目的港报关发票由 ${ci.issuer} 出具，但原产地证申请人是 ${co.issuer}。在多数自由贸易协定(FTA)下，若不申报为<b>第三方发票模式</b>并在 CO 上打勾备注，目的国海关极可能拒绝给予关税减免。`
+                        });
+                    }
+
+                    // 3. 发票与提货权分离异常
+                    if (ci.billedTo && bl.consignedTo && bl.consignedTo !== 'To Order' && ci.billedTo !== bl.consignedTo) {
+                        alerts.push({
+                            style: 'bg-consulting-warning border-yellow-200 text-consulting-warningText',
+                            icon: '⚠️',
+                            title: '单证不符：发票抬头与收货人冲突',
+                            desc: `报关发票的付款方 (${ci.billedTo}) 与提单上的收货人 (${bl.consignedTo}) 不一致。除特定背对背信用证交易外，这容易引起海关对“真实买卖主体”和资金洗钱的怀疑审查。`
+                        });
+                    }
+
+                    // 4. 首次销售提醒 (First Sale Prompt)
+                    if (isMultiParty && ci.issuer === firstParty) {
+                        alerts.push({
+                            style: 'bg-consulting-success border-green-200 text-consulting-successText',
+                            icon: '💡',
+                            title: '海关估价：具备首次销售 (First Sale) 雏形',
+                            desc: `最终进口报关使用的是最前端工厂 (${firstParty}) 的发票。只要能举证该交易“明确以出口至目的国为目的”且符合独立交易原则，即可按此较低价格作为完税价格申报，大幅节税。`
+                        });
+                    }
+
+                    return alerts;
+                });
 
                 const addLeg = () => {
-                    const lastBuyer = tradeLegs.value.length > 0 ? tradeLegs.value[tradeLegs.value.length - 1].buyer : '前序买方';
-                    tradeLegs.value.push({ seller: lastBuyer, buyer: '新参与方', term: 'EXW', cargoType: 'container', fcaLocation: 'seller_premises' });
+                    const lastBuyer = tradeLegs.value.length > 0 ? tradeLegs.value[tradeLegs.value.length - 1].buyer : '公司X';
+                    tradeLegs.value.push({ seller: lastBuyer, buyer: '公司Y', term: 'FOB', cargoType: 'container' });
                 };
 
                 const removeLeg = (index) => { tradeLegs.value.splice(index, 1); };
 
-                const getRiskTransfer = (leg) => {
-                    if (leg.term === 'FCA') {
-                        return leg.fcaLocation === 'seller_premises' ? "卖方所在地（完成装车）" : "其他指定地（货交承运人，卖方不卸车）";
-                    }
-                    return incotermsData[leg.term].riskTransfer;
-                };
-
+                const getRiskTransfer = (leg) => leg.term === 'FCA' && leg.fcaLocation === 'seller_premises' ? "卖方所在地（装车完毕）" : incotermsData[leg.term].riskTransfer;
+                
                 const getCosts = (leg, role) => {
                     let costs = [...incotermsData[leg.term][role + 'Costs']];
                     if (leg.term === 'FCA') {
-                        if (role === 'seller') {
-                            if (leg.fcaLocation === 'seller_premises') { costs.push("负责将货物装上买方安排的运输工具"); } 
-                            else { costs.push("运输至指定交货地", "不负责从运输工具上卸货"); }
-                        } else if (role === 'buyer') {
-                            if (leg.fcaLocation === 'seller_premises') { costs.push("自交货地起的全部运输"); } 
-                            else { costs.push("负责从卖方运输工具上卸货", "自交货地起的后续运输"); }
-                        }
+                        if (role === 'seller' && leg.fcaLocation === 'other_place') costs.push("不负责卸车");
+                        if (role === 'buyer' && leg.fcaLocation === 'seller_premises') costs.push("负责主运输前短驳");
                     }
                     return costs;
                 };
@@ -270,19 +330,19 @@
                     const element = document.getElementById('report-content');
                     const opt = {
                         margin:       10,
-                        filename:     '国际贸易链式分析报告.pdf',
+                        filename:     '供应链贸易术语与风控分析底稿.pdf',
                         image:        { type: 'jpeg', quality: 0.98 },
                         html2canvas:  { scale: 2 },
-                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }, // 改为纵向，最适合表格和卡片
-                        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] } // 优化分页不断行
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
                     };
                     html2pdf().set(opt).from(element).save();
                 };
 
                 return {
-                    incotermsData, tradeLegs, addLeg, removeLeg, 
-                    getRiskTransfer, getCosts, hasContainerWarning, getAlternativeTerm, 
-                    exportPDF, isDropShipment, firstParty, lastParty
+                    incotermsData, tradeLegs, allCompanies, documents, riskAlerts,
+                    addLeg, removeLeg, getRiskTransfer, getCosts, 
+                    hasContainerWarning, getAlternativeTerm, exportPDF
                 };
             }
         }).mount('#app');
