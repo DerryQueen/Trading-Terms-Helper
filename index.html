@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Incoterms & 供应链三流分析系统 - 专业版</title>
+    <title>国际贸易链式解析系统 - 专业版</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -34,18 +34,18 @@
         
         <header class="mb-8 border-b-2 border-consulting-blue pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
-                <h1 class="text-2xl md:text-3xl font-bold text-consulting-blue tracking-tight">国际贸易链式与三流解析工具</h1>
+                <h1 class="text-2xl md:text-3xl font-bold text-consulting-blue tracking-tight">国际贸易链式解析系统</h1>
                 <p class="text-sm text-gray-500 mt-1">基于 ICC Incoterms® 2020 | 专注海关估价与供应链合规</p>
             </div>
             <button @click="exportPDF" class="bg-consulting-purple hover:bg-purple-800 text-white text-sm py-2 px-6 rounded shadow transition shrink-0">
-                导出咨询报告 (PDF)
+                导出报告 (PDF)
             </button>
         </header>
 
         <section class="bg-white p-6 rounded-lg shadow-sm border border-gray-100 mb-8 pdf-no-break">
             <h2 class="text-lg font-semibold text-consulting-blue mb-4 flex items-center">
                 <span class="w-1 h-5 bg-consulting-purple inline-block mr-2"></span>
-                推演场景设定
+                场景设定
             </h2>
             
             <div class="space-y-4">
@@ -270,7 +270,7 @@
                     const element = document.getElementById('report-content');
                     const opt = {
                         margin:       10,
-                        filename:     '供应链贸易术语与三流分析报告.pdf',
+                        filename:     '国际贸易链式分析报告.pdf',
                         image:        { type: 'jpeg', quality: 0.98 },
                         html2canvas:  { scale: 2 },
                         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }, // 改为纵向，最适合表格和卡片
