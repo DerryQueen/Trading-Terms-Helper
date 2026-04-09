@@ -26,10 +26,10 @@
     
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased">
-    <div id="app" class="max-w-6xl mx-auto p-4 md:p-8">
+    <div id="app" class="max-w-7xl mx-auto p-4 md:p-8">
         
         <header class="mb-8 border-b-2 border-consulting-blue pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
@@ -52,22 +52,22 @@
                     
                     <div class="flex items-center gap-2 w-full lg:w-auto">
                         <span class="text-sm font-bold text-gray-400">段 {{ index + 1 }}</span>
-                        <input v-model="leg.seller" placeholder="卖方" class="border rounded px-2 py-1.5 w-32 text-center text-sm focus:outline-consulting-blue">
+                        <input v-model="leg.seller" placeholder="卖方" class="border rounded px-2 py-1.5 w-full text-center text-sm focus:outline-consulting-blue lg:w-32">
                         <span class="text-gray-400">→</span>
-                        <input v-model="leg.buyer" placeholder="买方" class="border rounded px-2 py-1.5 w-32 text-center text-sm focus:outline-consulting-blue">
+                        <input v-model="leg.buyer" placeholder="买方" class="border rounded px-2 py-1.5 w-full text-center text-sm focus:outline-consulting-blue lg:w-32">
                     </div>
                     
                     <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                        <select v-model="leg.term" class="border rounded px-3 py-1.5 bg-white font-bold text-consulting-purple text-sm focus:outline-consulting-blue">
+                        <select v-model="leg.term" class="border rounded px-3 py-1.5 bg-white font-bold text-consulting-purple text-sm focus:outline-consulting-blue w-full lg:w-auto">
                             <option v-for="(data, term) in incotermsData" :value="term">{{ term }}</option>
                         </select>
 
-                        <select v-model="leg.cargoType" class="border rounded px-3 py-1.5 bg-white text-sm text-gray-600 focus:outline-consulting-blue">
+                        <select v-model="leg.cargoType" class="border rounded px-3 py-1.5 bg-white text-sm text-gray-600 focus:outline-consulting-blue w-full lg:w-auto">
                             <option value="container">集装箱货物</option>
                             <option value="bulk">散杂货/传统海运</option>
                         </select>
 
-                        <select v-if="leg.term === 'FCA'" v-model="leg.fcaLocation" class="border border-consulting-blue bg-blue-50 rounded px-3 py-1.5 text-sm text-consulting-blue">
+                        <select v-if="leg.term === 'FCA'" v-model="leg.fcaLocation" class="border border-consulting-blue bg-blue-50 rounded px-3 py-1.5 text-sm text-consulting-blue w-full lg:w-auto">
                             <option value="seller_premises">交货地：卖方所在地</option>
                             <option value="other_place">交货地：其他指定地点</option>
                         </select>
@@ -83,20 +83,30 @@
                 </div>
             </div>
 
-            <button @click="addLeg" class="mt-5 text-consulting-blue text-sm border-2 border-consulting-blue border-dashed rounded px-6 py-2 hover:bg-consulting-light transition w-full md:w-auto font-medium">
+            <button @click="addLeg" class="mt-5 text-consulting-blue text-sm border-2 border-consulting-blue border-dashed rounded px-6 py-2 hover:bg-consulting-light transition w-full font-medium lg:w-auto">
                 + 新增流转节点
             </button>
         </section>
 
-        <section id="report-content" class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+        <section id="report-content" class="bg-white p-6 rounded-lg shadow-sm border border-gray-100 pdf-content-area">
             
-            <div class="mb-10">
+            <div class="mb-10 pdf-page-break">
                 <h2 class="text-lg font-semibold text-consulting-blue mb-4 flex items-center">
                     <span class="w-1 h-5 bg-consulting-blue inline-block mr-2"></span>
-                    供应链全景图
+                    供应链全景网络拓扑图 (商业流 & 物流)
                 </h2>
-                <div class="bg-gray-50 border border-gray-200 rounded p-6 flex justify-center items-center overflow-x-auto">
-                    <div id="mermaid-container" v-html="mermaidSvg"></div>
+                <div class="bg-gray-50 border border-gray-200 rounded p-4 overflow-x-auto relative">
+                    <div id="d3-topology-container" @click="handleD3Click"></div>
+                    <div v-if="d3SelectionDetails" class="absolute bottom-2 left-2 bg-white p-3 rounded shadow-lg border border-gray-200 text-sm max-w-sm pdf-no-capture z-10 d3-details-panel">
+                        <div class="font-bold text-consulting-blue flex justify-between items-center mb-1">
+                            {{ d3SelectionDetails.title }}
+                            <button @click="closeD3Details" class="text-gray-400 hover:text-red-500 text-xs">✖</button>
+                        </div>
+                        <ul class="list-disc pl-4 text-gray-600 space-y-1">
+                            <li v-for="cost in d3SelectionDetails.costs">{{ cost }}</li>
+                        </ul>
+                    </div>
+                    <div class="text-xs text-gray-400 text-center mt-2 pdf-no-capture">※ 手机用户可手指捏合缩放、拖拽平移，点击公司或边查看详情</div>
                 </div>
             </div>
 
@@ -148,19 +158,6 @@
     <script>
         const { createApp, ref, reactive, watch, onMounted, nextTick } = Vue;
 
-        // 初始化 Mermaid
-        mermaid.initialize({ 
-            startOnLoad: false,
-            theme: 'base',
-            themeVariables: {
-                primaryColor: '#F3F4F6',
-                primaryBorderColor: '#1E3A8A',
-                primaryTextColor: '#1E3A8A',
-                lineColor: '#4C1D95',
-                fontFamily: 'sans-serif'
-            }
-        });
-
         createApp({
             setup() {
                 const incotermsData = reactive({
@@ -182,40 +179,182 @@
                     { seller: '中间商B', buyer: '进口商C', term: 'CIF', cargoType: 'container' }
                 ]);
 
-                const mermaidSvg = ref('');
+                const d3SelectionDetails = ref(null);
 
-                // 核心：生成并渲染 Mermaid 图表
-                const renderGraph = async () => {
-                    if (tradeLegs.value.length === 0) return;
+                // D3 拓扑图渲染核心逻辑
+                const renderGraph = () => {
+                    const container = document.getElementById('d3-topology-container');
+                    if (!container || tradeLegs.value.length === 0) return;
                     
-                    let graphDef = 'graph LR\n';
+                    // 1. 数据准备
+                    const companies = new Set();
+                    const commercialEdges = [];
                     tradeLegs.value.forEach((leg, index) => {
-                        // 净化输入内容，防止破坏 Mermaid 语法
                         const sellerName = leg.seller.replace(/[\"\[\]\(\)\-\>\;]/g, '');
                         const buyerName = leg.buyer.replace(/[\"\[\]\(\)\-\>\;]/g, '');
-                        const risk = getRiskTransfer(leg).split('（')[0]; // 截取风险点的主体部分，保持图表清爽
-                        
-                        // 格式： 节点A["名称"] -->|"术语 (风险点)"| 节点B["名称"]
-                        graphDef += `    N_${index}_S["${sellerName}"] -->|"${leg.term} \\n 风险: ${risk}"| N_${index}_B["${buyerName}"]\n`;
-                        
-                        // 如果下一段的卖方是当前的买方，连接它们
-                        if (index < tradeLegs.value.length - 1) {
-                            const nextSeller = tradeLegs.value[index + 1].seller.replace(/[\"\[\]\(\)\-\>\;]/g, '');
-                            if (buyerName === nextSeller) {
-                                graphDef += `    N_${index}_B ~~~ N_${index+1}_S\n`; // 隐形连接辅助布局
-                            }
-                        }
+                        companies.add(sellerName);
+                        companies.add(buyerName);
+                        commercialEdges.push({ source: sellerName, target: buyerName, term: leg.term, cargoType: leg.cargoType, fcaLocation: leg.fcaLocation, risk: getRiskTransfer(leg).split('（')[0], type: 'commercial' });
                     });
+                    
+                    const logisticsEdges = [];
+                    if (commercialEdges.length > 0) {
+                        logisticsEdges.push({ source: commercialEdges[0].source, target: commercialEdges[commercialEdges.length - 1].target, type: 'logistics', freight: commercialEdges.map(e => e.cargoType === 'container' ? '集装箱主运输运费（illustrative）' : '传统海运主运输运费（illustrative）'), insurance: commercialEdges.filter(e => e.term === 'CIF' || e.term === 'CIP').map(e => `${e.term}illustrative保险费项目`) });
+                    }
+                    
+                    const nodes = Array.from(companies).map(id => ({ id }));
+                    const edges = [...commercialEdges, ...logisticsEdges];
+                    
+                    // 2. 清空容器
+                    container.innerHTML = '';
+                    
+                    // 3. SVG设置
+                    const width = 800; // 初始宽度
+                    const height = 400; // 初始高度
+                    const svg = d3.select('#d3-topology-container')
+                        .append('svg')
+                        .attr('viewBox', [0, 0, width, height]) // 适配移动端和PDF
+                        .attr('width', '100%')
+                        .attr('height', '100%')
+                        .call(d3.zoom().on('zoom', (event) => { // 缩放与平移
+                            g.attr('transform', event.transform);
+                        }))
+                        .append('g'); // 内部容器
+                    
+                    const g = svg.append('g'); // 内部容器，用于缩放与平移
 
-                    try {
-                        const { svg } = await mermaid.render('mermaid-chart-temp', graphDef);
-                        mermaidSvg.value = svg;
-                    } catch (error) {
-                        console.error('Mermaid 渲染失败:', error);
+                    // 4. 模拟力导向布局
+                    const simulation = d3.forceSimulation(nodes)
+                        .force('link', d3.forceLink(edges).id(d => d.id).distance(200).strength(0.1))
+                        .force('charge', d3.forceManyBody().strength(-1000))
+                        .force('center', d3.forceCenter(width / 2, height / 2))
+                        .force('x', d3.forceX(width / 2).strength(0.1))
+                        .force('y', d3.forceY(height / 2).strength(0.1));
+
+                    // 5. 渲染边
+                    const linkCommercial = g.append('g')
+                        .selectAll('.commercial')
+                        .data(commercialEdges)
+                        .join('line')
+                        .attr('class', 'commercial pdf-no-capture')
+                        .attr('stroke', '#4C1D95')
+                        .attr('stroke-opacity', 0.6)
+                        .attr('stroke-width', 2)
+                        .attr('marker-end', 'url(#commercial-arrow)');
+                    
+                    const linkLogistics = g.append('g')
+                        .selectAll('.logistics')
+                        .data(logisticsEdges)
+                        .join('path') // 使用路径，支持弧线
+                        .attr('class', 'logistics pdf-no-capture')
+                        .attr('stroke', '#1E3A8A')
+                        .attr('stroke-dasharray', '5,5')
+                        .attr('stroke-width', 1.5)
+                        .attr('fill', 'none')
+                        .attr('marker-end', 'url(#logistics-arrow)')
+                        .on('click', (event, d) => showD3Details('物流', d.freight.concat(d.insurance)));
+
+                    // 6. 渲染节点
+                    const node = g.append('g')
+                        .selectAll('circle')
+                        .data(nodes)
+                        .join('circle')
+                        .attr('r', 25)
+                        .attr('fill', '#F3F4F6')
+                        .attr('stroke', '#1E3A8A')
+                        .attr('stroke-width', 2)
+                        .on('click', (event, d) => showD3Details(`公司：${d.id}`, ['illustrative地址: XX国XX市XX工业区', '关联方标志：无', 'illustrative参数：A公司协助费项目, B公司佣金项目, C公司特许权使用费项目'])); // 增加illustrative数据
+
+                    // 7. 渲染文字
+                    const labelNode = g.append('g')
+                        .selectAll('text')
+                        .data(nodes)
+                        .join('text')
+                        .text(d => d.id)
+                        .attr('font-family', 'sans-serif')
+                        .attr('font-size', '14px') // 初始字体，缩放后清晰
+                        .attr('text-anchor', 'middle')
+                        .attr('dy', '0.35em');
+
+                    // 8. 箭头设置
+                    svg.append('defs').append('marker')
+                        .attr('id', 'commercial-arrow')
+                        .attr('viewBox', '0 -5 10 10')
+                        .attr('refX', 30)
+                        .attr('markerWidth', 6)
+                        .attr('markerHeight', 6)
+                        .attr('orient', 'auto')
+                        .append('path')
+                        .attr('d', 'M0,-5L10,0L0,5')
+                        .attr('fill', '#4C1D95');
+
+                    svg.append('defs').append('marker')
+                        .attr('id', 'logistics-arrow')
+                        .attr('viewBox', '0 -5 10 10')
+                        .attr('refX', 30)
+                        .attr('markerWidth', 6)
+                        .attr('markerHeight', 6)
+                        .attr('orient', 'auto')
+                        .append('path')
+                        .attr('d', 'M0,-5L10,0L0,5')
+                        .attr('fill', '#1E3A8A');
+
+                    // 9. D3交互与 stacked 详情
+                    const commercialDetails = linkCommercial
+                        .on('click', (event, d) => showD3Details(`${d.source.id} → ${d.buyer}（商业流）`, [
+                            `术语：${d.term}`,
+                            `货物类型：${d.cargoType === 'container' ? '集装箱货物 (⚠️THC预警)' : '散杂货/传统海运'}`,
+                            `FCA交货地差异：${d.term === 'FCA' ? (d.fcaLocation === 'seller_premises' ? '卖方所在地（完成装车，卖方负荷）' : '其他指定地（货交承运人，卖方不卸车）') : '无'}`,
+                            `保险差异：${d.term === 'CIF' ? '最低险/平安险(Clause C)' : (d.term === 'CIP' ? '一切险(Clause A)' : '无默认保险需求')}`,
+                            `风险转移点：${d.risk}`,
+                            `货权（Title）：不受Incoterms约束，须依赖合同条款（如所有权保留条款）`,
+                            `估价调整项目：A公司 illustrative协助项目, B公司 illustrative买方佣金项目, C公司 illustrative特许权项目`
+                        ]));
+
+                    // 10. 更新力导向布局
+                    simulation.on('tick', () => {
+                        linkCommercial
+                            .attr('x1', d => d.source.x)
+                            .attr('y1', d => d.source.y)
+                            .attr('x2', d => d.target.x)
+                            .attr('y2', d => d.target.y);
+
+                        node
+                            .attr('cx', d => d.x)
+                            .attr('cy', d => d.y);
+
+                        labelNode
+                            .attr('x', d => d.x)
+                            .attr('y', d => d.y);
+                        
+                        linkLogistics.attr('d', d => {
+                            const dr = 200; // 弧线半径
+                            return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
+                        });
+                    });
+                };
+
+                const showD3Details = (title, costs) => {
+                    d3SelectionDetails.value = { title, costs };
+                    // 确保详情面板展示在顶部，处理 stacked 布局
+                    nextTick(() => {
+                        const panel = document.querySelector('.d3-details-panel');
+                        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
+                };
+
+                const closeD3Details = () => {
+                    d3SelectionDetails.value = null;
+                };
+
+                // D3 容器点击事件，捕获非节点边点击以关闭详情
+                const handleD3Click = (event) => {
+                    if (event.target.tagName !== 'circle' && event.target.tagName !== 'line' && event.target.tagName !== 'path' && d3SelectionDetails.value) {
+                        closeD3Details();
                     }
                 };
 
-                // 监听数据变化，自动重绘图表
+                // 监听数据变化，自动重绘拓扑图
                 watch(tradeLegs, () => {
                     nextTick(() => { renderGraph(); });
                 }, { deep: true });
@@ -256,20 +395,42 @@
                 const getAlternativeTerm = (term) => ({ 'FOB': 'FCA', 'CFR': 'CPT', 'CIF': 'CIP' }[term] || '');
 
                 const exportPDF = () => {
+                    // 优化导出体验，临时隐藏不适宜导出的元素或调整布局
+                    document.querySelector('.d3-details-panel')?.style.setProperty('display', 'none', 'important');
+                    const elementsToHide = document.querySelectorAll('.pdf-no-capture');
+                    elementsToHide.forEach(el => el.style.setProperty('display', 'none', 'important'));
+                    
                     const element = document.getElementById('report-content');
+                    // 动态调整拓扑图SVG字体和元素大小，确保在PDF中能大致清晰
+                    const svg = d3.select('#d3-topology-container svg');
+                    const textNodes = svg.selectAll('text');
+                    const initialFontSizes = textNodes.nodes().map(node => d3.select(node).attr('font-size'));
+                    const initialCircleRs = svg.selectAll('circle').nodes().map(node => d3.select(node).attr('r'));
+                    const initialStrokeWidths = svg.selectAll('.commercial,.logistics').nodes().map(node => d3.select(node).attr('stroke-width'));
+                    textNodes.attr('font-size', '20px'); // 临时放大
+                    svg.selectAll('circle').attr('r', 35);
+                    svg.selectAll('.commercial,.logistics').attr('stroke-width', 3);
+
                     const opt = {
-                        margin:       10,
-                        filename:     '贸易链路架构评估报告.pdf',
+                        margin:       [5, 10, 5, 10], // 上右下左
+                        filename:     '贸易链路架构评估报告_专业版.pdf',
                         image:        { type: 'jpeg', quality: 0.98 },
-                        html2canvas:  { scale: 2, useCORS: true },
-                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' } // 改回纵向，更适合包含图表的报告
+                        html2canvas:  { scale: 2, useCORS: true, logging: false }, // 增加 scale 以提高图片清晰度，useCORS 以跨域加载库
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' } // 改为横向，更适合包含网络图的报告
                     };
-                    html2pdf().set(opt).from(element).save();
+                    html2pdf().set(opt).from(element).save().then(() => {
+                        // 导出完成后，恢复原状
+                        document.querySelector('.d3-details-panel')?.style.removeProperty('display');
+                        elementsToHide.forEach(el => el.style.removeProperty('display'));
+                        textNodes.each(function(d, i) { d3.select(this).attr('font-size', initialFontSizes[i]); });
+                        svg.selectAll('circle').each(function(d, i) { d3.select(this).attr('r', initialCircleRs[i]); });
+                        svg.selectAll('.commercial,.logistics').each(function(d, i) { d3.select(this).attr('stroke-width', initialStrokeWidths[i]); });
+                    });
                 };
 
                 return {
                     incotermsData, tradeLegs, addLeg, removeLeg, 
-                    getRiskTransfer, getCosts, hasContainerWarning, getAlternativeTerm, exportPDF, mermaidSvg
+                    getRiskTransfer, getCosts, hasContainerWarning, getAlternativeTerm, exportPDF, d3SelectionDetails, handleD3Click, closeD3Details
                 };
             }
         }).mount('#app');
